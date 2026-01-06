@@ -1,0 +1,83 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "windows-latest"
+
+variables:
+  buildConfiguration: "Release"
+
+stages:
+- stage: BuildAndTest
+  displayName: "Build & Test"
+  jobs:
+  - job: Build
+    displayName: "Restore, Build, Test"
+    steps:
+    - task: UseDotNet@2
+      displayName: "Use .NET SDK"
+      inputs:
+        packageType: "sdk"
+        version: "8.x"
+
+    - script: dotnet --info
+      displayName: "Show .NET info"
+
+    - script: dotnet restore
+      displayName: "Restore"
+
+    - script: dotnet build --configuration $(buildConfiguration) --no-restore
+      displayName: "Build"
+
+    - script: dotnet test --configuration $(buildConfiguration) --no-build --collect "XPlat Code Coverage"
+      displayName: "Test (with coverage)"
+
+    - task: PublishTestResults@2
+      displayName: "Publish test results"
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: "VSTest"
+        testResultsFiles: "**/*.trx"
+        failTaskOnFailedTests: false
+
+- stage: SecurityChecks
+  displayName: "Security & Quality Checks (Demo)"
+  dependsOn: BuildAndTest
+  condition: succeeded()
+  jobs:
+  - job: Security
+    displayName: "Run basic security checks"
+    steps:
+    - script: |
+        echo "Running dependency scan (demo placeholder)"
+        echo "Tip: Integrate tools like OWASP Dependency-Check, Snyk, or Trivy here."
+      displayName: "Dependency Scan (placeholder)"
+
+    - script: |
+        echo "Running SAST scan (demo placeholder)"
+        echo "Tip: Integrate SonarQube, CodeQL, or similar here."
+      displayName: "SAST (placeholder)"
+
+    - script: |
+        echo "Quality gate (demo): fail if TODO markers exist"
+        powershell -NoProfile -Command ^
+          "$hits = (Get-ChildItem -Recurse -File -Include *.cs,*.yml,*.yaml,*.md | Select-String -Pattern 'TODO' -SimpleMatch); ^
+           if ($hits) { Write-Host 'TODO found. Failing quality gate.'; exit 1 } else { Write-Host 'Quality gate passed.' }"
+      displayName: "Quality Gate (simple example)"
+
+- stage: Package
+  displayName: "Package Artifact"
+  dependsOn: SecurityChecks
+  condition: succeeded()
+  jobs:
+  - job: Pack
+    displayName: "Publish artifact"
+    steps:
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish pipeline artifact"
+      inputs:
+        PathtoPublish: "$(Build.SourcesDirectory)"
+        ArtifactName: "source-drop"
+        publishLocation: "Container"
